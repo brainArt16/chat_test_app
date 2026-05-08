@@ -200,6 +200,41 @@ export default function Page() {
     [localUserId, peerUserId]
   );
 
+  const loadHistory = async () => {
+    setError("");
+    const api = apiBaseUrl.trim();
+    const tk = token.trim();
+    const peer = Number(peerUserId.trim());
+    if (!api || !tk || !Number.isFinite(peer) || peer <= 0) return;
+    try {
+      const res = await fetch(`${api}/api/chat/messages/${peer}?limit=100`, {
+        headers: { Authorization: `Bearer ${tk}` },
+      });
+      const json = await res.json();
+      const items = Array.isArray(json?.data) ? json.data : [];
+      items.sort((a, b) => {
+        const ta = a?.createdAt ? Date.parse(a.createdAt) : 0;
+        const tb = b?.createdAt ? Date.parse(b.createdAt) : 0;
+        return ta - tb;
+      });
+      setMessages(
+        items.map((m) => ({
+          id: `db-${m.id}`,
+          body: m.message || "",
+          type: m.messageType || "text",
+          mediaUrl: m.mediaUrl || "",
+          mediaMimeType: m.mediaMimeType || "",
+          mediaFileName: m.mediaFileName || "",
+          at: m.createdAt ? new Date(m.createdAt).toLocaleTimeString() : "",
+          fromMe: String(m.userId) === localUserId.trim(),
+        }))
+      );
+      setEventLog((prev) => [...prev.slice(-30), `history loaded (${items.length})`]);
+    } catch (e) {
+      setEventLog((prev) => [...prev.slice(-30), "history load failed"]);
+    }
+  };
+
   const peerOnline = useMemo(() => {
     if (peerTyping) return true;
     if (!lastPeerActivityAt) return false;
@@ -251,6 +286,7 @@ export default function Page() {
       setActiveRoom(selectedRoom);
       setEventLog((prev) => [...prev.slice(-30), `connect -> join_room ${selectedRoom}`]);
       socket.emit("join_room", selectedRoom);
+      void loadHistory();
     });
 
     socket.on("disconnect", () => {
@@ -584,6 +620,7 @@ export default function Page() {
         <div className="toolbar">
           <button onClick={connect}>Connect + Join Room</button>
           <button onClick={disconnect}>Disconnect</button>
+          <button onClick={() => void loadHistory()}>Reload History</button>
           <button onClick={() => setMessages([])}>Clear Messages</button>
         </div>
         <p className="small">
