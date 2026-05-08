@@ -458,8 +458,8 @@ export default function Page() {
 
   return (
     <main>
-      <h1>Simple Realtime Chat Tester</h1>
-      <p className="small">
+      <h1 className="headline">Modern Chat Test Client</h1>
+      <p className="subline">
         Connect to <code>ck_chat</code>, join one DM room, send/receive live messages.
       </p>
       <p className="small">
@@ -469,7 +469,7 @@ export default function Page() {
       </p>
 
       <div className="card">
-        <h3>Quick Auth (dev profile)</h3>
+        <h3 className="section-title">Quick Auth (Dev)</h3>
         <div className="grid" style={{ marginBottom: 10 }}>
           <input
             value={apiBaseUrl}
@@ -482,7 +482,7 @@ export default function Page() {
             placeholder="User email for /api/auth/tmp-login"
           />
         </div>
-        <div className="row">
+        <div className="toolbar">
           <button disabled={loggingIn} onClick={quickLogin}>
             {loggingIn ? "Logging in..." : "Quick Login (tmp-login)"}
           </button>
@@ -493,7 +493,7 @@ export default function Page() {
       </div>
 
       <div className="card">
-        <h3>Socket Session</h3>
+        <h3 className="section-title">Session & Payload</h3>
         <div className="grid">
           <input
             value={chatUrl}
@@ -565,14 +565,15 @@ export default function Page() {
             />
           </div>
         ) : null}
-        <div className="row" style={{ marginTop: 10 }}>
+        <div className="toolbar">
           <button onClick={connect}>Connect + Join Room</button>
           <button onClick={disconnect}>Disconnect</button>
           <button onClick={() => setMessages([])}>Clear Messages</button>
         </div>
         <p className="small">
-          Status: <strong>{status}</strong> | Room input: <code>{room || "(invalid)"}</code> | Active room:{" "}
-          <code>{activeRoom || "(not joined yet)"}</code>
+          <span className="chip">Status: {status}</span>{" "}
+          <span className="chip">Room input: {room || "(invalid)"}</span>{" "}
+          <span className="chip">Active room: {activeRoom || "(not joined yet)"}</span>
         </p>
         <p className="small">If you change either user id, click Connect + Join Room again.</p>
         {error ? <p style={{ color: "#f87171" }}>Error: {error}</p> : null}
@@ -584,6 +585,7 @@ export default function Page() {
       </div>
 
       <div className="card">
+        <h3 className="section-title">Conversation</h3>
         <div className="messages" ref={messagesRef}>
           {messages.length === 0 ? (
             <p className="small">No messages yet.</p>
@@ -646,7 +648,7 @@ export default function Page() {
           )}
           {peerTyping ? <p className="small">Peer is typing...</p> : null}
         </div>
-        <div className="row" style={{ marginTop: 10 }}>
+        <div className="composer">
           <input
             value={text}
             onChange={(e) => handleTextChange(e.target.value)}
