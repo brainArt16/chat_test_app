@@ -7,6 +7,7 @@ const DEFAULT_API_BASE_URL =
   process.env.NEXT_PUBLIC_TEST_API_BASE_URL || "http://127.0.0.1:8080";
 const DEFAULT_CHAT_URL =
   process.env.NEXT_PUBLIC_TEST_CHAT_URL || "http://127.0.0.1:3001";
+const QUICK_EMOJIS = ["😀", "😂", "😍", "👍", "🙏", "🔥", "🎉", "❤️", "😎", "🤝"];
 
 function makeRoom(localUserId, peerUserId) {
   const a = Number(localUserId);
@@ -187,6 +188,7 @@ export default function Page() {
   const [activeRoom, setActiveRoom] = useState("");
   const [eventLog, setEventLog] = useState([]);
   const [peerTyping, setPeerTyping] = useState(false);
+  const [lastPeerActivityAt, setLastPeerActivityAt] = useState(0);
 
   const socketRef = useRef(null);
   const messagesRef = useRef(null);
@@ -197,6 +199,12 @@ export default function Page() {
     () => makeRoom(localUserId.trim(), peerUserId.trim()),
     [localUserId, peerUserId]
   );
+
+  const peerOnline = useMemo(() => {
+    if (peerTyping) return true;
+    if (!lastPeerActivityAt) return false;
+    return Date.now() - lastPeerActivityAt < 60_000;
+  }, [peerTyping, lastPeerActivityAt]);
 
   useEffect(() => {
     if (!messagesRef.current) return;
@@ -210,6 +218,7 @@ export default function Page() {
     }
     isTypingRef.current = false;
     setPeerTyping(false);
+    setLastPeerActivityAt(0);
     if (socketRef.current) {
       socketRef.current.removeAllListeners();
       socketRef.current.disconnect();
@@ -265,11 +274,13 @@ export default function Page() {
     socket.on(`message_${selectedRoom}`, (payload) => {
       if (payload?.type === "typing") {
         setPeerTyping(true);
+        setLastPeerActivityAt(Date.now());
         setEventLog((prev) => [...prev.slice(-30), `recv typing ${selectedRoom}`]);
         return;
       }
       if (payload?.type === "stopped_typing") {
         setPeerTyping(false);
+        setLastPeerActivityAt(Date.now());
         setEventLog((prev) => [...prev.slice(-30), `recv stopped_typing ${selectedRoom}`]);
         return;
       }
@@ -277,6 +288,7 @@ export default function Page() {
       const recipient = String(payload?.userId ?? "");
       const fromMe = recipient === peerUserId.trim();
       setEventLog((prev) => [...prev.slice(-30), `recv message_${selectedRoom}`]);
+      if (!fromMe) setLastPeerActivityAt(Date.now());
       setMessages((prev) => [
         ...prev,
         {
@@ -378,6 +390,10 @@ export default function Page() {
       isTypingRef.current = false;
       setEventLog((prev) => [...prev.slice(-30), `send stopped_typing -> room ${activeRoom}`]);
     }, 1200);
+  };
+
+  const addEmoji = (emoji) => {
+    handleTextChange(`${text}${emoji}`);
   };
 
   const quickLogin = async () => {
@@ -586,6 +602,14 @@ export default function Page() {
 
       <div className="card">
         <h3 className="section-title">Conversation</h3>
+        <div className="status-row">
+          <span className={`status-dot ${status === "connected" ? "online" : "offline"}`} />
+          <span className="small">You: {status === "connected" ? "online" : "offline"}</span>
+          <span className={`status-dot ${peerOnline ? "online" : "offline"}`} />
+          <span className="small">
+            Peer: {peerTyping ? "typing..." : peerOnline ? "online" : "offline/unknown"}
+          </span>
+        </div>
         <div className="messages" ref={messagesRef}>
           {messages.length === 0 ? (
             <p className="small">No messages yet.</p>
@@ -647,6 +671,13 @@ export default function Page() {
             ))
           )}
           {peerTyping ? <p className="small">Peer is typing...</p> : null}
+        </div>
+        <div className="emoji-row">
+          {QUICK_EMOJIS.map((emoji) => (
+            <button key={emoji} type="button" className="emoji-btn" onClick={() => addEmoji(emoji)}>
+              {emoji}
+            </button>
+          ))}
         </div>
         <div className="composer">
           <input

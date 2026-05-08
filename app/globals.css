@@ -178,6 +178,48 @@ button:disabled {
   height: 100%;
 }
 
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.08);
+}
+
+.status-dot.online {
+  background: #22c55e;
+}
+
+.status-dot.offline {
+  background: #64748b;
+}
+
+.emoji-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.emoji-btn {
+  width: auto;
+  min-width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid #33435f;
+  background: #0d1526;
+  padding: 4px 8px;
+  font-size: 18px;
+  line-height: 1;
+}
+
 select {
   width: 100%;
   border-radius: 10px;
