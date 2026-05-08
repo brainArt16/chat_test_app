@@ -188,7 +188,7 @@ export default function Page() {
   const [activeRoom, setActiveRoom] = useState("");
   const [eventLog, setEventLog] = useState([]);
   const [peerTyping, setPeerTyping] = useState(false);
-  const [lastPeerActivityAt, setLastPeerActivityAt] = useState(0);
+  const [peerPresence, setPeerPresence] = useState({ online: false, lastSeenAt: "" });
 
   const socketRef = useRef(null);
   const messagesRef = useRef(null);
@@ -235,16 +235,17 @@ export default function Page() {
     }
   };
 
-  const peerOnline = useMemo(() => {
-    if (peerTyping) return true;
-    if (!lastPeerActivityAt) return false;
-    return Date.now() - lastPeerActivityAt < 60_000;
-  }, [peerTyping, lastPeerActivityAt]);
+  const peerOnline = Boolean(peerPresence.online);
 
   useEffect(() => {
     if (!messagesRef.current) return;
     messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
   }, [messages]);
+
+  useEffect(() => {
+    setPeerPresence({ online: false, lastSeenAt: "" });
+    setPeerTyping(false);
+  }, [peerUserId]);
 
   const disconnect = () => {
     if (typingStopTimerRef.current) {
@@ -253,7 +254,7 @@ export default function Page() {
     }
     isTypingRef.current = false;
     setPeerTyping(false);
-    setLastPeerActivityAt(0);
+    setPeerPresence({ online: false, lastSeenAt: "" });
     if (socketRef.current) {
       socketRef.current.removeAllListeners();
       socketRef.current.disconnect();
@@ -286,6 +287,10 @@ export default function Page() {
       setActiveRoom(selectedRoom);
       setEventLog((prev) => [...prev.slice(-30), `connect -> join_room ${selectedRoom}`]);
       socket.emit("join_room", selectedRoom);
+      const peer = Number(peerUserId.trim());
+      if (Number.isFinite(peer) && peer > 0) {
+        socket.emit("presence_query", [peer]);
+      }
       void loadHistory();
     });
 
@@ -310,13 +315,11 @@ export default function Page() {
     socket.on(`message_${selectedRoom}`, (payload) => {
       if (payload?.type === "typing") {
         setPeerTyping(true);
-        setLastPeerActivityAt(Date.now());
         setEventLog((prev) => [...prev.slice(-30), `recv typing ${selectedRoom}`]);
         return;
       }
       if (payload?.type === "stopped_typing") {
         setPeerTyping(false);
-        setLastPeerActivityAt(Date.now());
         setEventLog((prev) => [...prev.slice(-30), `recv stopped_typing ${selectedRoom}`]);
         return;
       }
@@ -324,7 +327,6 @@ export default function Page() {
       const recipient = String(payload?.userId ?? "");
       const fromMe = recipient === peerUserId.trim();
       setEventLog((prev) => [...prev.slice(-30), `recv message_${selectedRoom}`]);
-      if (!fromMe) setLastPeerActivityAt(Date.now());
       setMessages((prev) => [
         ...prev,
         {
@@ -337,6 +339,35 @@ export default function Page() {
           at: new Date().toLocaleTimeString(),
           fromMe,
         },
+      ]);
+    });
+
+    socket.on("presence_update", (payload) => {
+      const peerId = peerUserId.trim();
+      if (!peerId) return;
+      if (String(payload?.userId ?? "") !== peerId) return;
+      setPeerPresence({
+        online: Boolean(payload?.online),
+        lastSeenAt: String(payload?.lastSeenAt || ""),
+      });
+      setEventLog((prev) => [
+        ...prev.slice(-30),
+        `presence_update ${peerId}: ${payload?.online ? "online" : "offline"}`,
+      ]);
+    });
+
+    socket.on("presence_snapshot", (payload) => {
+      const peerId = peerUserId.trim();
+      if (!peerId) return;
+      const p = payload?.users?.[peerId];
+      if (!p) return;
+      setPeerPresence({
+        online: Boolean(p?.online),
+        lastSeenAt: String(p?.lastSeenAt || ""),
+      });
+      setEventLog((prev) => [
+        ...prev.slice(-30),
+        `presence_snapshot ${peerId}: ${p?.online ? "online" : "offline"}`,
       ]);
     });
   };
@@ -644,7 +675,14 @@ export default function Page() {
           <span className="small">You: {status === "connected" ? "online" : "offline"}</span>
           <span className={`status-dot ${peerOnline ? "online" : "offline"}`} />
           <span className="small">
-            Peer: {peerTyping ? "typing..." : peerOnline ? "online" : "offline/unknown"}
+            Peer:{" "}
+            {peerTyping
+              ? "typing..."
+              : peerOnline
+                ? "online"
+                : peerPresence.lastSeenAt
+                  ? `offline (last seen ${new Date(peerPresence.lastSeenAt).toLocaleTimeString()})`
+                  : "offline/unknown"}
           </span>
         </div>
         <div className="messages" ref={messagesRef}>
