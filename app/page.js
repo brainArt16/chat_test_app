@@ -220,11 +220,13 @@ export default function Page() {
       setMessages(
         items.map((m) => ({
           id: `db-${m.id}`,
+          messageId: m.id,
           body: m.message || "",
           type: m.messageType || "text",
           mediaUrl: m.mediaUrl || "",
           mediaMimeType: m.mediaMimeType || "",
           mediaFileName: m.mediaFileName || "",
+          reactions: Array.isArray(m.reactions) ? m.reactions : [],
           at: m.createdAt ? new Date(m.createdAt).toLocaleTimeString() : "",
           fromMe: String(m.userId) === localUserId.trim(),
         }))
@@ -323,6 +325,19 @@ export default function Page() {
         setEventLog((prev) => [...prev.slice(-30), `recv stopped_typing ${selectedRoom}`]);
         return;
       }
+      if (payload?.type === "reaction_update") {
+        const messageId = Number(payload?.messageId);
+        if (!Number.isFinite(messageId) || messageId <= 0) return;
+        setMessages((prev) =>
+          prev.map((m) =>
+            Number(m.messageId) === messageId
+              ? { ...m, reactions: Array.isArray(payload?.reactions) ? payload.reactions : [] }
+              : m
+          )
+        );
+        setEventLog((prev) => [...prev.slice(-30), `recv reaction_update ${messageId}`]);
+        return;
+      }
       const body = payload?.message || "";
       const recipient = String(payload?.userId ?? "");
       const fromMe = recipient === peerUserId.trim();
@@ -331,11 +346,13 @@ export default function Page() {
         ...prev,
         {
           id: `${Date.now()}-${Math.random()}`,
+          messageId: payload?.serverMessageId || null,
           body,
           type: payload?.type || "text",
           mediaUrl: payload?.mediaUrl || "",
           mediaMimeType: payload?.mediaMimeType || "",
           mediaFileName: payload?.mediaFileName || "",
+          reactions: Array.isArray(payload?.reactions) ? payload.reactions : [],
           at: new Date().toLocaleTimeString(),
           fromMe,
         },
@@ -461,6 +478,25 @@ export default function Page() {
 
   const addEmoji = (emoji) => {
     handleTextChange(`${text}${emoji}`);
+  };
+
+  const toggleReaction = (message, emoji) => {
+    if (!socketRef.current || !activeRoom || !message?.messageId) return;
+    const existing =
+      Array.isArray(message.reactions) &&
+      message.reactions.find((r) => r?.emoji === emoji && r?.reactedByMe);
+    socketRef.current.emit("message", {
+      room: activeRoom,
+      message: {
+        type: existing ? "reaction_remove" : "reaction_add",
+        messageId: Number(message.messageId),
+        emoji,
+      },
+    });
+    setEventLog((prev) => [
+      ...prev.slice(-30),
+      `${existing ? "remove" : "add"} reaction ${emoji} -> ${message.messageId}`,
+    ]);
   };
 
   const quickLogin = async () => {
@@ -742,6 +778,43 @@ export default function Page() {
                   </div>
                 ) : null}
                 <div className="meta">{m.at}</div>
+                {Array.isArray(m.reactions) && m.reactions.length > 0 ? (
+                  <div style={{ marginTop: 6, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {m.reactions.map((r) => (
+                      <button
+                        key={`${m.id}-${r.emoji}`}
+                        type="button"
+                        onClick={() => toggleReaction(m, r.emoji)}
+                        style={{
+                          width: "auto",
+                          padding: "2px 8px",
+                          borderRadius: 999,
+                          border: r.reactedByMe ? "1px solid #93c5fd" : "1px solid #475569",
+                          background: r.reactedByMe ? "rgba(59,130,246,0.25)" : "rgba(15,23,42,0.55)",
+                          color: "#dbeafe",
+                          fontSize: 12,
+                        }}
+                      >
+                        {r.emoji} {r.count}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                {m.messageId ? (
+                  <div style={{ marginTop: 6, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {["👍", "❤️", "😂", "🔥", "🙏"].map((emoji) => (
+                      <button
+                        key={`${m.id}-quick-${emoji}`}
+                        type="button"
+                        onClick={() => toggleReaction(m, emoji)}
+                        className="emoji-btn"
+                        style={{ height: 26, minWidth: 28, padding: "2px 6px", fontSize: 14 }}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             ))
           )}
