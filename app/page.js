@@ -326,7 +326,9 @@ export default function Page() {
         return;
       }
       if (payload?.type === "reaction_update") {
-        const messageId = Number(payload?.messageId);
+        const messageId = Number(
+          payload?.messageId ?? payload?.serverMessageId ?? payload?.id
+        );
         if (!Number.isFinite(messageId) || messageId <= 0) return;
         setMessages((prev) =>
           prev.map((m) =>
@@ -341,12 +343,18 @@ export default function Page() {
       const body = payload?.message || "";
       const recipient = String(payload?.userId ?? "");
       const fromMe = recipient === peerUserId.trim();
+      const resolvedMessageId = Number(
+        payload?.serverMessageId ?? payload?.messageId ?? payload?.id
+      );
       setEventLog((prev) => [...prev.slice(-30), `recv message_${selectedRoom}`]);
       setMessages((prev) => [
         ...prev,
         {
           id: `${Date.now()}-${Math.random()}`,
-          messageId: payload?.serverMessageId || null,
+          messageId:
+            Number.isFinite(resolvedMessageId) && resolvedMessageId > 0
+              ? resolvedMessageId
+              : null,
           body,
           type: payload?.type || "text",
           mediaUrl: payload?.mediaUrl || "",
