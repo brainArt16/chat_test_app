@@ -2,28 +2,49 @@
   box-sizing: border-box;
 }
 
+/*
+ * CookingClass dashboard dark theme (ck_dashboard/app/globals.css `.dark`).
+ * Chat test app uses the same semantic tokens for visual parity with admin UI.
+ */
 :root {
-  --bg-0: #0b0f19;
-  --bg-1: #0f1625;
-  --bg-2: #131d31;
-  --card: #121a2c;
-  --stroke: #27334a;
-  --text: #e6ecff;
-  --muted: #9fb0d3;
-  --primary: #4f8cff;
-  --primary-strong: #3c74da;
+  --background: oklch(0.1 0 0);
+  --foreground: oklch(0.95 0 0);
+  --card: oklch(0.14 0 0);
+  --card-foreground: oklch(0.95 0 0);
+  --primary: oklch(0.7 0.18 15);
+  --primary-foreground: oklch(0.1 0 0);
+  --secondary: oklch(0.2 0 0);
+  --secondary-foreground: oklch(0.95 0 0);
+  --muted: oklch(0.2 0 0);
+  --muted-foreground: oklch(0.6 0 0);
+  --accent: oklch(0.22 0.02 15);
+  --accent-foreground: oklch(0.7 0.18 15);
+  --destructive: oklch(0.5 0.2 25);
+  --destructive-foreground: oklch(0.95 0 0);
+  --border: oklch(0.22 0 0);
+  --input: oklch(0.22 0 0);
+  --ring: oklch(0.7 0.18 15);
+  --success: oklch(0.6 0.15 145);
+  --chart-3: oklch(0.6 0.15 260);
+  --radius: 0.625rem;
+
+  /* Legacy aliases used in this app */
+  --bg-0: var(--background);
+  --bg-1: var(--secondary);
+  --bg-2: var(--card);
+  --stroke: var(--border);
+  --text: var(--foreground);
+  --muted-text: var(--muted-foreground);
+  --primary-strong: oklch(0.58 0.18 15);
 }
 
 html,
 body {
   margin: 0;
   padding: 0;
-  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-  background:
-    radial-gradient(1200px 500px at 20% -10%, #1d2e55 0%, transparent 60%),
-    radial-gradient(900px 400px at 100% 0%, #1a2444 0%, transparent 50%),
-    var(--bg-0);
-  color: var(--text);
+  font-family: 'Geist', Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  background: var(--background);
+  color: var(--foreground);
 }
 
 main {
@@ -33,12 +54,13 @@ main {
 }
 
 .card {
-  border: 1px solid var(--stroke);
-  border-radius: 14px;
-  background: linear-gradient(180deg, #121a2c 0%, #10182a 100%);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 4px);
+  background: var(--card);
+  color: var(--card-foreground);
   padding: 14px;
   margin-bottom: 14px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 8px 24px oklch(0 0 0 / 0.35);
 }
 
 .grid {
@@ -48,12 +70,13 @@ main {
 }
 
 input,
-button {
+button,
+select {
   width: 100%;
-  border-radius: 10px;
-  border: 1px solid #33435f;
-  background: #0d1526;
-  color: var(--text);
+  border-radius: var(--radius);
+  border: 1px solid var(--input);
+  background: var(--secondary);
+  color: var(--foreground);
   padding: 10px;
 }
 
@@ -61,15 +84,20 @@ input:focus,
 button:focus,
 select:focus {
   outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(79, 140, 255, 0.2);
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 35%, transparent);
 }
 
 button {
   cursor: pointer;
-  background: linear-gradient(180deg, var(--primary) 0%, var(--primary-strong) 100%);
+  background: var(--primary);
+  color: var(--primary-foreground);
   border-color: transparent;
   font-weight: 600;
+}
+
+button:hover:not(:disabled) {
+  background: color-mix(in oklch, var(--primary) 88%, var(--foreground));
 }
 
 button:disabled {
@@ -85,15 +113,15 @@ button:disabled {
 .messages {
   height: 500px;
   overflow-y: auto;
-  border: 1px solid var(--stroke);
-  border-radius: 12px;
-  background: linear-gradient(180deg, #0c1322 0%, #0b1220 100%);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 2px);
+  background: var(--background);
   padding: 12px;
 }
 
 .msg {
   max-width: 80%;
-  border-radius: 14px;
+  border-radius: calc(var(--radius) + 4px);
   padding: 10px 12px;
   margin-bottom: 10px;
   white-space: pre-wrap;
@@ -103,25 +131,32 @@ button:disabled {
 
 .mine {
   margin-left: auto;
-  background: linear-gradient(180deg, #3d79ef 0%, #2f68d8 100%);
-  border-color: #3e6ec7;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-color: color-mix(in oklch, var(--primary) 75%, var(--border));
 }
 
 .other {
   margin-right: auto;
-  background: #1b273b;
-  border-color: #2d3b53;
+  background: var(--muted);
+  color: var(--foreground);
+  border-color: var(--border);
 }
 
 .meta {
   margin-top: 6px;
   font-size: 11px;
-  opacity: 0.75;
+  opacity: 0.85;
+  color: color-mix(in oklch, var(--foreground) 80%, transparent);
+}
+
+.mine .meta {
+  color: color-mix(in oklch, var(--primary-foreground) 85%, transparent);
 }
 
 .small {
   font-size: 12px;
-  color: var(--muted);
+  color: var(--muted-foreground);
 }
 
 .headline {
@@ -132,7 +167,7 @@ button:disabled {
 
 .subline {
   margin: 0 0 6px;
-  color: var(--muted);
+  color: var(--muted-foreground);
 }
 
 .section-title {
@@ -140,16 +175,16 @@ button:disabled {
   font-size: 14px;
   letter-spacing: 0.02em;
   text-transform: uppercase;
-  color: #bfd0f5;
+  color: var(--muted-foreground);
 }
 
 .chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: 1px solid #3b4d6b;
-  background: #172238;
-  color: #bfd0f5;
+  border: 1px solid var(--border);
+  background: var(--secondary);
+  color: var(--muted-foreground);
   padding: 4px 8px;
   border-radius: 999px;
   font-size: 12px;
@@ -190,15 +225,15 @@ button:disabled {
   height: 10px;
   border-radius: 999px;
   display: inline-block;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 0 2px oklch(1 0 0 / 0.08);
 }
 
 .status-dot.online {
-  background: #22c55e;
+  background: var(--success);
 }
 
 .status-dot.offline {
-  background: #64748b;
+  background: var(--muted-foreground);
 }
 
 .emoji-row {
@@ -208,33 +243,38 @@ button:disabled {
   margin-top: 10px;
 }
 
-.emoji-btn {
+button.emoji-btn,
+button.btn-inline,
+button.reaction-pill {
+  background: var(--secondary);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  font-weight: 500;
+}
+
+button.emoji-btn {
   width: auto;
   min-width: 36px;
   height: 36px;
-  border-radius: 10px;
-  border: 1px solid #33435f;
-  background: #0d1526;
+  border-radius: var(--radius);
   padding: 4px 8px;
   font-size: 18px;
   line-height: 1;
 }
 
-select {
-  width: 100%;
-  border-radius: 10px;
-  border: 1px solid #33435f;
-  background: #0d1526;
-  color: var(--text);
-  padding: 10px;
+button.emoji-btn:hover:not(:disabled),
+button.btn-inline:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--accent-foreground);
 }
 
 code {
-  background: #0e1729;
-  border: 1px solid #2e3f5c;
-  border-radius: 6px;
+  background: var(--secondary);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
   padding: 2px 6px;
   font-size: 12px;
+  color: var(--foreground);
 }
 
 .receipt {
@@ -242,17 +282,75 @@ code {
   margin-left: 6px;
   font-size: 11px;
   font-weight: 600;
-  opacity: 0.85;
+  opacity: 0.9;
 }
 
 .receipt.sent {
-  color: #94a3b8;
+  color: var(--muted-foreground);
 }
 
 .receipt.delivered {
-  color: #93c5fd;
+  color: var(--muted-foreground);
 }
 
 .receipt.read {
-  color: #86efac;
+  color: var(--chart-3);
+}
+
+.text-destructive {
+  color: var(--destructive);
+}
+
+.link-accent {
+  color: var(--accent-foreground);
+}
+
+.link-accent:hover {
+  color: var(--primary);
+}
+
+.media-attachment {
+  display: inline-block;
+  width: fit-content;
+  max-width: 300px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px;
+  background: color-mix(in oklch, var(--card) 90%, var(--background));
+}
+
+button.btn-inline {
+  width: auto;
+  padding: 4px 8px;
+  border-radius: calc(var(--radius) - 2px);
+}
+
+.preview-block {
+  margin-top: 8px;
+  max-height: 180px;
+  overflow: auto;
+  white-space: pre-wrap;
+  background: var(--secondary);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  padding: 8px;
+  color: var(--foreground);
+}
+
+button.reaction-pill {
+  width: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: color-mix(in oklch, var(--secondary) 80%, var(--background));
+}
+
+button.reaction-pill.active {
+  border-color: var(--chart-3);
+  background: color-mix(in oklch, var(--chart-3) 22%, var(--secondary));
+  color: var(--accent-foreground);
+}
+
+button.reaction-pill:hover:not(:disabled) {
+  background: color-mix(in oklch, var(--chart-3) 15%, var(--secondary));
 }

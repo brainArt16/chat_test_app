@@ -117,17 +117,7 @@ function FileAttachment({ message }) {
   };
 
   return (
-    <div
-      style={{
-        display: "inline-block",
-        width: "fit-content",
-        maxWidth: 300,
-        border: "1px solid #384152",
-        borderRadius: 8,
-        padding: 8,
-        background: "rgba(0,0,0,0.15)",
-      }}
-    >
+    <div className="media-attachment">
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
         <span>{category.icon}</span>
         <strong>{fileName}</strong>
@@ -138,46 +128,25 @@ function FileAttachment({ message }) {
         {message?.mediaMimeType ? ` • ${message.mediaMimeType}` : ""}
       </div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <a href={message.mediaUrl} target="_blank" rel="noreferrer" style={{ color: "#bfdbfe" }}>
+        <a href={message.mediaUrl} target="_blank" rel="noreferrer" className="link-accent">
           Open
         </a>
-        <a href={message.mediaUrl} download style={{ color: "#bfdbfe" }}>
+        <a href={message.mediaUrl} download className="link-accent">
           Download
         </a>
         {category.canPreviewText ? (
-          <button
-            type="button"
-            onClick={tryPreview}
-            style={{
-              width: "auto",
-              padding: "4px 8px",
-              borderRadius: 6,
-              border: "1px solid #384152",
-              background: "#0d111a",
-            }}
-            disabled={loadingPreview}
-          >
+          <button type="button" className="btn-inline" onClick={tryPreview} disabled={loadingPreview}>
             {loadingPreview ? "Loading..." : "Preview text"}
           </button>
         ) : null}
       </div>
       {previewError ? (
-        <div className="small" style={{ marginTop: 8, color: "#fca5a5" }}>
+        <div className="small text-destructive" style={{ marginTop: 8 }}>
           Preview error: {previewError}
         </div>
       ) : null}
       {previewText ? (
-        <pre
-          style={{
-            marginTop: 8,
-            maxHeight: 180,
-            overflow: "auto",
-            whiteSpace: "pre-wrap",
-            background: "rgba(0,0,0,0.25)",
-            borderRadius: 6,
-            padding: 8,
-          }}
-        >
+        <pre className="preview-block">
           {previewText}
         </pre>
       ) : null}
@@ -828,7 +797,6 @@ export default function Page() {
           <select
             value={messageType}
             onChange={(e) => setMessageType(e.target.value)}
-            style={{ borderRadius: 8, border: "1px solid #384152", background: "#0d111a", color: "#e5e7eb", padding: 10 }}
           >
             <option value="text">text</option>
             <option value="image">image</option>
@@ -912,7 +880,7 @@ export default function Page() {
           env).
         </p>
         <p className="small">If you change either user id, click Connect + Join Room again.</p>
-        {error ? <p style={{ color: "#f87171" }}>Error: {error}</p> : null}
+        {error ? <p className="text-destructive">Error: {error}</p> : null}
         {eventLog.length ? (
           <p className="small">
             Last events: <code>{eventLog.slice(-4).join(" | ")}</code>
@@ -1004,15 +972,7 @@ export default function Page() {
                         key={`${m.id}-${r.emoji}`}
                         type="button"
                         onClick={() => toggleReaction(m, r.emoji)}
-                        style={{
-                          width: "auto",
-                          padding: "2px 8px",
-                          borderRadius: 999,
-                          border: r.reactedByMe ? "1px solid #93c5fd" : "1px solid #475569",
-                          background: r.reactedByMe ? "rgba(59,130,246,0.25)" : "rgba(15,23,42,0.55)",
-                          color: "#dbeafe",
-                          fontSize: 12,
-                        }}
+                        className={`reaction-pill${r.reactedByMe ? " active" : ""}`}
                       >
                         {r.emoji} {r.count}
                       </button>
