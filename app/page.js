@@ -215,6 +215,7 @@ export default function Page() {
   const typingStopTimerRef = useRef(null);
   const markDeliveredTimerRef = useRef(null);
   const markReadTimerRef = useRef(null);
+  const receiptSyncTimerRef = useRef(null);
   const receiptEmitRef = useRef({ markDelivered: null, markRead: null });
   const isTypingRef = useRef(false);
 
@@ -222,6 +223,40 @@ export default function Page() {
     () => makeRoom(localUserId.trim(), peerUserId.trim()),
     [localUserId, peerUserId]
   );
+
+  const refreshOutboundReceipts = async () => {
+    const api = apiBaseUrl.trim();
+    const tk = token.trim();
+    const local = localUserId.trim();
+    const peer = Number(peerUserId.trim());
+    if (!api || !tk || !local || !Number.isFinite(peer) || peer <= 0) return;
+    try {
+      const res = await fetch(`${api}/api/chat/messages/${peer}?limit=100`, {
+        headers: { Authorization: `Bearer ${tk}` },
+      });
+      const json = await res.json();
+      const items = Array.isArray(json?.data) ? json.data : [];
+      const receiptById = new Map();
+      for (const m of items) {
+        if (String(m.userId) !== local) continue;
+        receiptById.set(m.id, {
+          delivered: Boolean(m.delivered),
+          read: Boolean(m.read),
+        });
+      }
+      if (receiptById.size === 0) return;
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (!m.fromMe || !m.messageId) return m;
+          const flags = receiptById.get(m.messageId);
+          if (!flags) return m;
+          return applyReceiptFlags(m, flags);
+        })
+      );
+    } catch {
+      /* ignore background sync errors */
+    }
+  };
 
   const loadHistory = async () => {
     setError("");
@@ -287,6 +322,10 @@ export default function Page() {
     if (markReadTimerRef.current) {
       clearTimeout(markReadTimerRef.current);
       markReadTimerRef.current = null;
+    }
+    if (receiptSyncTimerRef.current) {
+      clearInterval(receiptSyncTimerRef.current);
+      receiptSyncTimerRef.current = null;
     }
     isTypingRef.current = false;
     setPeerTyping(false);
@@ -394,6 +433,10 @@ export default function Page() {
           scheduleInboundReceipts();
         }
       })();
+      if (receiptSyncTimerRef.current) clearInterval(receiptSyncTimerRef.current);
+      receiptSyncTimerRef.current = setInterval(() => {
+        void refreshOutboundReceipts();
+      }, 4000);
     });
 
     socket.on("disconnect", () => {
