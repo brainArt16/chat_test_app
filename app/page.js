@@ -214,6 +214,7 @@ export default function Page() {
   const messagesRef = useRef(null);
   const typingStopTimerRef = useRef(null);
   const markDeliveredTimerRef = useRef(null);
+  const markReadTimerRef = useRef(null);
   const receiptEmitRef = useRef({ markDelivered: null, markRead: null });
   const isTypingRef = useRef(false);
 
@@ -239,25 +240,26 @@ export default function Page() {
         const tb = b?.createdAt ? Date.parse(b.createdAt) : 0;
         return ta - tb;
       });
-      setMessages(
-        items.map((m) => ({
-          id: `db-${m.id}`,
-          messageId: m.id,
-          body: m.message || "",
-          type: m.messageType || "text",
-          mediaUrl: m.mediaUrl || "",
-          mediaMimeType: m.mediaMimeType || "",
-          mediaFileName: m.mediaFileName || "",
-          reactions: Array.isArray(m.reactions) ? m.reactions : [],
-          at: m.createdAt ? new Date(m.createdAt).toLocaleTimeString() : "",
-          fromMe: String(m.userId) === localUserId.trim(),
-          delivered: Boolean(m.delivered),
-          read: Boolean(m.read),
-        }))
-      );
+      const mapped = items.map((m) => ({
+        id: `db-${m.id}`,
+        messageId: m.id,
+        body: m.message || "",
+        type: m.messageType || "text",
+        mediaUrl: m.mediaUrl || "",
+        mediaMimeType: m.mediaMimeType || "",
+        mediaFileName: m.mediaFileName || "",
+        reactions: Array.isArray(m.reactions) ? m.reactions : [],
+        at: m.createdAt ? new Date(m.createdAt).toLocaleTimeString() : "",
+        fromMe: String(m.userId) === localUserId.trim(),
+        delivered: Boolean(m.delivered),
+        read: Boolean(m.read),
+      }));
+      setMessages(mapped);
       setEventLog((prev) => [...prev.slice(-30), `history loaded (${items.length})`]);
+      return mapped.some((m) => !m.fromMe);
     } catch (e) {
       setEventLog((prev) => [...prev.slice(-30), "history load failed"]);
+      return false;
     }
   };
 
@@ -281,6 +283,10 @@ export default function Page() {
     if (markDeliveredTimerRef.current) {
       clearTimeout(markDeliveredTimerRef.current);
       markDeliveredTimerRef.current = null;
+    }
+    if (markReadTimerRef.current) {
+      clearTimeout(markReadTimerRef.current);
+      markReadTimerRef.current = null;
     }
     isTypingRef.current = false;
     setPeerTyping(false);
@@ -307,6 +313,7 @@ export default function Page() {
 
     const selectedRoom = room;
     const peerIdAtConnect = peerUserId.trim();
+    const localIdAtConnect = localUserId.trim();
 
     const emitMarkDelivered = () => {
       if (!socketRef.current) return;
@@ -334,6 +341,19 @@ export default function Page() {
       }, 500);
     };
 
+    const scheduleMarkRead = () => {
+      if (markReadTimerRef.current) clearTimeout(markReadTimerRef.current);
+      markReadTimerRef.current = setTimeout(() => {
+        markReadTimerRef.current = null;
+        emitMarkRead();
+      }, 1200);
+    };
+
+    const scheduleInboundReceipts = () => {
+      scheduleMarkDelivered();
+      scheduleMarkRead();
+    };
+
     const socket = io(chatUrl.trim(), {
       auth: { token: token.trim() },
       transports: ["websocket", "polling"],
@@ -348,11 +368,15 @@ export default function Page() {
         kind === "delivered"
           ? payload?.data?.messagesMarkedDelivered
           : payload?.data?.messagesMarkedRead;
-      setLastReceiptAck({ kind, count: Number(count) || 0, at: new Date().toLocaleTimeString() });
+      const n = Number(count) || 0;
+      setLastReceiptAck({ kind, count: n, at: new Date().toLocaleTimeString() });
       setEventLog((prev) => [
         ...prev.slice(-30),
         `receipt_mark_result ${kind}: ${count ?? 0} updated`,
       ]);
+      if (kind === "delivered" && n > 0) {
+        scheduleMarkRead();
+      }
     });
 
     socket.on("connect", () => {
@@ -364,7 +388,12 @@ export default function Page() {
       if (Number.isFinite(peer) && peer > 0) {
         socket.emit("presence_query", [peer]);
       }
-      void loadHistory();
+      void (async () => {
+        const hasInbound = await loadHistory();
+        if (hasInbound) {
+          scheduleInboundReceipts();
+        }
+      })();
     });
 
     socket.on("disconnect", () => {
@@ -412,8 +441,9 @@ export default function Page() {
         return;
       }
       if (payload?.type === "receipt_update") {
-        const recipientId = String(payload?.recipientUserId ?? "");
-        if (recipientId !== peerIdAtConnect) return;
+        const markerId = String(payload?.recipientUserId ?? "");
+        // recipientUserId is who marked (inbound on their device); sender updates outbound ticks.
+        if (markerId === localIdAtConnect || markerId !== peerIdAtConnect) return;
         const delivered = Boolean(payload.delivered);
         const read = Boolean(payload.read);
         const bulk = Boolean(payload.bulk);
@@ -467,7 +497,7 @@ export default function Page() {
         },
       ]);
       if (!fromMe) {
-        scheduleMarkDelivered();
+        scheduleInboundReceipts();
       }
     });
 
@@ -833,9 +863,10 @@ export default function Page() {
           ) : null}
         </p>
         <p className="small">
-          Inbound messages auto-send <code>mark_delivered</code> (500ms debounce). Use{" "}
-          <code>mark_read</code> when the thread is read. Outbound bubbles show receipt ticks; peer
-          updates arrive as <code>receipt_update</code> on <code>message_&lt;room&gt;</code>.
+          Inbound messages auto-send <code>mark_delivered</code> (500ms) then{" "}
+          <code>mark_read</code> (1.2s) while connected. Manual buttons still work. Outbound ticks
+          update via <code>receipt_update</code> on <code>message_&lt;room&gt;</code> (needs Java relay
+          env).
         </p>
         <p className="small">If you change either user id, click Connect + Join Room again.</p>
         {error ? <p style={{ color: "#f87171" }}>Error: {error}</p> : null}
