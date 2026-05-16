@@ -147,11 +147,11 @@ button:disabled {
   margin-top: 6px;
   font-size: 11px;
   opacity: 0.85;
-  color: color-mix(in oklch, var(--foreground) 80%, transparent);
+  color: var(--foreground);
 }
 
 .mine .meta {
-  color: color-mix(in oklch, var(--primary-foreground) 85%, transparent);
+  color: var(--primary-foreground);
 }
 
 .small {
@@ -286,15 +286,15 @@ code {
 }
 
 .receipt.sent {
-  color: var(--muted-foreground);
+  color: var(--foreground);
 }
 
 .receipt.delivered {
-  color: var(--muted-foreground);
+  color: var(--foreground);
 }
 
 .receipt.read {
-  color: var(--chart-3);
+  color: var(--foreground);
 }
 
 .text-destructive {
