@@ -17,6 +17,25 @@ function makeRoom(localUserId, peerUserId) {
   return a < b ? `${a}_${b}` : `${b}_${a}`;
 }
 
+function ReceiptTicks({ message }) {
+  if (!message.fromMe) return null;
+  if (message.read) {
+    return <span className="receipt read" title="Read">✓✓ read</span>;
+  }
+  if (message.delivered) {
+    return <span className="receipt delivered" title="Delivered">✓ delivered</span>;
+  }
+  return <span className="receipt sent" title="Sent">sent</span>;
+}
+
+function applyReceiptFlags(message, { delivered, read }) {
+  return {
+    ...message,
+    delivered: read || delivered || message.delivered,
+    read: read || message.read,
+  };
+}
+
 function inferMediaKind(message) {
   const type = String(message?.type || "").toLowerCase();
   if (type === "image" || type === "video" || type === "audio" || type === "file") return type;
@@ -189,10 +208,13 @@ export default function Page() {
   const [eventLog, setEventLog] = useState([]);
   const [peerTyping, setPeerTyping] = useState(false);
   const [peerPresence, setPeerPresence] = useState({ online: false, lastSeenAt: "" });
+  const [lastReceiptAck, setLastReceiptAck] = useState(null);
 
   const socketRef = useRef(null);
   const messagesRef = useRef(null);
   const typingStopTimerRef = useRef(null);
+  const markDeliveredTimerRef = useRef(null);
+  const receiptEmitRef = useRef({ markDelivered: null, markRead: null });
   const isTypingRef = useRef(false);
 
   const room = useMemo(
@@ -229,6 +251,8 @@ export default function Page() {
           reactions: Array.isArray(m.reactions) ? m.reactions : [],
           at: m.createdAt ? new Date(m.createdAt).toLocaleTimeString() : "",
           fromMe: String(m.userId) === localUserId.trim(),
+          delivered: Boolean(m.delivered),
+          read: Boolean(m.read),
         }))
       );
       setEventLog((prev) => [...prev.slice(-30), `history loaded (${items.length})`]);
@@ -254,9 +278,15 @@ export default function Page() {
       clearTimeout(typingStopTimerRef.current);
       typingStopTimerRef.current = null;
     }
+    if (markDeliveredTimerRef.current) {
+      clearTimeout(markDeliveredTimerRef.current);
+      markDeliveredTimerRef.current = null;
+    }
     isTypingRef.current = false;
     setPeerTyping(false);
     setPeerPresence({ online: false, lastSeenAt: "" });
+    receiptEmitRef.current = { markDelivered: null, markRead: null };
+    setLastReceiptAck(null);
     if (socketRef.current) {
       socketRef.current.removeAllListeners();
       socketRef.current.disconnect();
@@ -276,6 +306,34 @@ export default function Page() {
     disconnect();
 
     const selectedRoom = room;
+    const peerIdAtConnect = peerUserId.trim();
+
+    const emitMarkDelivered = () => {
+      if (!socketRef.current) return;
+      socketRef.current.emit("message", {
+        room: selectedRoom,
+        message: { type: "mark_delivered" },
+      });
+      setEventLog((prev) => [...prev.slice(-30), `send mark_delivered -> ${selectedRoom}`]);
+    };
+
+    const emitMarkRead = () => {
+      if (!socketRef.current) return;
+      socketRef.current.emit("message", {
+        room: selectedRoom,
+        message: { type: "mark_read" },
+      });
+      setEventLog((prev) => [...prev.slice(-30), `send mark_read -> ${selectedRoom}`]);
+    };
+
+    const scheduleMarkDelivered = () => {
+      if (markDeliveredTimerRef.current) clearTimeout(markDeliveredTimerRef.current);
+      markDeliveredTimerRef.current = setTimeout(() => {
+        markDeliveredTimerRef.current = null;
+        emitMarkDelivered();
+      }, 500);
+    };
+
     const socket = io(chatUrl.trim(), {
       auth: { token: token.trim() },
       transports: ["websocket", "polling"],
@@ -283,6 +341,19 @@ export default function Page() {
     });
     socketRef.current = socket;
     setStatus("connecting");
+
+    socket.on("receipt_mark_result", (payload) => {
+      const kind = payload?.kind || "?";
+      const count =
+        kind === "delivered"
+          ? payload?.data?.messagesMarkedDelivered
+          : payload?.data?.messagesMarkedRead;
+      setLastReceiptAck({ kind, count: Number(count) || 0, at: new Date().toLocaleTimeString() });
+      setEventLog((prev) => [
+        ...prev.slice(-30),
+        `receipt_mark_result ${kind}: ${count ?? 0} updated`,
+      ]);
+    });
 
     socket.on("connect", () => {
       setStatus("connected");
@@ -340,9 +411,37 @@ export default function Page() {
         setEventLog((prev) => [...prev.slice(-30), `recv reaction_update ${messageId}`]);
         return;
       }
+      if (payload?.type === "receipt_update") {
+        const recipientId = String(payload?.recipientUserId ?? "");
+        if (recipientId !== peerIdAtConnect) return;
+        const delivered = Boolean(payload.delivered);
+        const read = Boolean(payload.read);
+        const bulk = Boolean(payload.bulk);
+        const ids = Array.isArray(payload.messageIds)
+          ? payload.messageIds.map((id) => Number(id)).filter((id) => id > 0)
+          : [];
+        setMessages((prev) => {
+          if (bulk) {
+            return prev.map((m) =>
+              m.fromMe ? applyReceiptFlags(m, { delivered, read }) : m
+            );
+          }
+          const idSet = new Set(ids);
+          return prev.map((m) =>
+            m.fromMe && m.messageId && idSet.has(Number(m.messageId))
+              ? applyReceiptFlags(m, { delivered, read })
+              : m
+          );
+        });
+        setEventLog((prev) => [
+          ...prev.slice(-30),
+          `recv receipt_update ${read ? "read" : "delivered"} ids=${bulk ? "bulk" : ids.length}`,
+        ]);
+        return;
+      }
       const body = payload?.message || "";
       const recipient = String(payload?.userId ?? "");
-      const fromMe = recipient === peerUserId.trim();
+      const fromMe = recipient === peerIdAtConnect;
       const resolvedMessageId = Number(
         payload?.serverMessageId ?? payload?.messageId ?? payload?.id
       );
@@ -363,9 +462,16 @@ export default function Page() {
           reactions: Array.isArray(payload?.reactions) ? payload.reactions : [],
           at: new Date().toLocaleTimeString(),
           fromMe,
+          delivered: false,
+          read: false,
         },
       ]);
+      if (!fromMe) {
+        scheduleMarkDelivered();
+      }
     });
+
+    receiptEmitRef.current = { markDelivered: emitMarkDelivered, markRead: emitMarkRead };
 
     socket.on("presence_update", (payload) => {
       const peerId = peerUserId.trim();
@@ -587,7 +693,9 @@ export default function Page() {
     <main>
       <h1 className="headline">Modern Chat Test Client</h1>
       <p className="subline">
-        Connect to <code>ck_chat</code>, join one DM room, send/receive live messages.
+        Connect to <code>ck_chat</code>, join one DM room, send/receive live messages, and test
+        delivery/read receipts over Socket.IO (<code>mark_delivered</code>, <code>mark_read</code>,
+        <code>receipt_update</code>).
       </p>
       <p className="small">
         Defaults come from <code>NEXT_PUBLIC_TEST_API_BASE_URL</code> and{" "}
@@ -698,10 +806,36 @@ export default function Page() {
           <button onClick={() => void loadHistory()}>Reload History</button>
           <button onClick={() => setMessages([])}>Clear Messages</button>
         </div>
+        <div className="toolbar" style={{ marginTop: 8 }}>
+          <button
+            type="button"
+            disabled={status !== "connected"}
+            onClick={() => receiptEmitRef.current.markDelivered?.()}
+          >
+            Mark delivered (socket)
+          </button>
+          <button
+            type="button"
+            disabled={status !== "connected"}
+            onClick={() => receiptEmitRef.current.markRead?.()}
+          >
+            Mark read (socket)
+          </button>
+        </div>
         <p className="small">
           <span className="chip">Status: {status}</span>{" "}
           <span className="chip">Room input: {room || "(invalid)"}</span>{" "}
           <span className="chip">Active room: {activeRoom || "(not joined yet)"}</span>
+          {lastReceiptAck ? (
+            <span className="chip">
+              Last ack: {lastReceiptAck.kind} ({lastReceiptAck.count}) @ {lastReceiptAck.at}
+            </span>
+          ) : null}
+        </p>
+        <p className="small">
+          Inbound messages auto-send <code>mark_delivered</code> (500ms debounce). Use{" "}
+          <code>mark_read</code> when the thread is read. Outbound bubbles show receipt ticks; peer
+          updates arrive as <code>receipt_update</code> on <code>message_&lt;room&gt;</code>.
         </p>
         <p className="small">If you change either user id, click Connect + Join Room again.</p>
         {error ? <p style={{ color: "#f87171" }}>Error: {error}</p> : null}
@@ -785,7 +919,10 @@ export default function Page() {
                     })()}
                   </div>
                 ) : null}
-                <div className="meta">{m.at}</div>
+                <div className="meta">
+                  {m.at}
+                  <ReceiptTicks message={m} />
+                </div>
                 {Array.isArray(m.reactions) && m.reactions.length > 0 ? (
                   <div style={{ marginTop: 6, display: "flex", gap: 6, flexWrap: "wrap" }}>
                     {m.reactions.map((r) => (

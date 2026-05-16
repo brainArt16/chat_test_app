@@ -69,3 +69,32 @@ Message emit payload:
 ```
 
 `message.userId` is the recipient (peer) id.
+
+## Delivery & read receipts (Socket.IO)
+
+While connected, the test client:
+
+- **Auto** sends `mark_delivered` (debounced 500ms) after each **inbound** live message.
+- Exposes **Mark delivered (socket)** and **Mark read (socket)** buttons (same `message` envelope as text/reactions).
+- Listens for **`receipt_mark_result`** (ack to your emit) and **`receipt_update`** on `message_<room>` (peer’s ticks on your outbound bubbles).
+- Shows **sent / delivered / read** on your outbound messages.
+
+Requires backend **`COOKINGCLASS_CHAT_RELAY_BASE_URL`** pointing at ck_chat for the **peer** to see `receipt_update` in realtime (see `ck_backend/docs/CHAT_INTEGRATION.md` §6).
+
+Receipt emit shape:
+
+```json
+{
+  "room": "2_3",
+  "message": { "type": "mark_delivered" }
+}
+```
+
+```json
+{
+  "room": "2_3",
+  "message": { "type": "mark_read" }
+}
+```
+
+No `userId` field — peer is inferred from `room`.
